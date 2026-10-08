@@ -22,6 +22,7 @@ class Service:
         self.scanned_count = 0
         self.eligible_count = 0
         self.last_alert = 0
+        self.last_status_log = 0
         self.tasks = []
 
     def status(self):
@@ -80,6 +81,10 @@ class Service:
                         continue
                     self.engine.enter(signal, self.market.quotes.get(signal.symbol), now,
                                       self.market.min_notional(signal.symbol))
+                if time.time()-self.last_status_log >= 60:
+                    log.info('Binance scan complete: market_ready=%s spot_pairs=%d eligible_usdt=%d analyzed=%d signals=%d',
+                             self.status()['market_ready'], len(self.market.universe), eligible, len(symbols), len(signals))
+                    self.last_status_log = time.time()
             except asyncio.CancelledError:
                 raise
             except MarketError as exc:

@@ -40,6 +40,7 @@ class Telegram:
                                           'text': f"#{item['id']}\n{item['message']}"[:4000]})
             self.store.acknowledge(item['id'])
             self.last_delivery = time.time()
+            log.info('Telegram delivery confirmed: outbox_id=%s', item['id'])
         self.last_error = None
 
     async def handle(self, update):
@@ -84,6 +85,11 @@ class Telegram:
         if not self.cfg.telegram_token:
             log.info('Telegram not configured; notifications remain in the durable outbox')
             return
+        if self.cfg.telegram_chat_id:
+            self.store.enqueue('✅ تم تشغيل Salem Wave Rider وربط إشعارات تلغرام.\n'
+                               '🧪 تداول ورقي فقط. لم يُفعّل تحليل OpenRouter بعد.\n'
+                               'أرسل /status للحالة أو /report للتقرير أو /positions للمراكز.\n\n'
+                               + self.engine.report())
         while True:
             try:
                 await self.flush()
