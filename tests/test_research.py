@@ -95,3 +95,32 @@ def test_primary_pause_blocks_shadow_entries(tmp_path):
     assert all(not e.s['positions'] for e in research.shadows.values())
     research.close()
     main.store.db.close()
+
+
+@pytest.mark.parametrize('crash', [False, True])
+def test_btc_below_average_allows_altcoin_but_sharp_drop_still_blocks(tmp_path, crash):
+    cfg=replace(Config(),data_dir=str(tmp_path),research_enabled=True)
+    main=Engine(cfg,Store(str(tmp_path/'main.db')))
+    research=Research(cfg,main)
+    eth=bars()
+    btc=bars()
+    for row in btc:
+        o,h,l,c=row[1:5]
+        row[1:5]=[300-o,300-l,300-h,300-c]
+    if crash:
+        for row in btc[-4:]:
+            row[1:5]=[v*.9 for v in row[1:5]]
+    now=320*900
+    frame=closed_features(btc,now*1000)
+    assert frame.iloc[-1][4]<frame.iloc[-1]['sma200']
+    quotes={s:{'bid':rows[-1][4],'ask':rows[-1][4],'ask_qty':1000,'ts':now}
+            for s,rows in [('BTCUSDT',btc),('ETHUSDT',eth)]}
+    try:
+        research.analyze({'BTCUSDT':btc,'ETHUSDT':eth},quotes,now)
+        assert ('ETHUSDT' in research.shadows['donchian20'].s['positions']) is (not crash)
+        assert research.diagnostics['btc_regime'] is (not crash)
+        assert research.diagnostics['btc_sma_gate_enabled'] is False
+        assert main.s['cash']==300 and main.s['research_blocked']
+    finally:
+        research.close()
+        main.store.db.close()

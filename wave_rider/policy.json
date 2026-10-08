@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-08-v3-70-pairs",
+  "version": "2026-10-08-v4-btc-crash-only",
   "interval": "15m",
   "symbols": [
     "BTCUSDT",
@@ -30,5 +30,10 @@
     "primary_approved": false
   },
   "live_pair_target": 70,
-  "live_universe": "Top 70 eligible spot USDT pairs by 24h quote volume; BTC additionally required for regime. If fewer qualify, report actual count without weakening eligibility."
+  "live_universe": "Top 70 eligible spot USDT pairs by 24h quote volume; BTC additionally required for regime. If fewer qualify, report actual count without weakening eligibility.",
+  "live_btc_filter": {
+    "require_above_sma200": false,
+    "block_hour_return_lte": -0.025,
+    "require_fresh_closed_candles": true
+  }
 }

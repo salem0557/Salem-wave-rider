@@ -53,6 +53,7 @@ class Research:
                 'المخاطرة القصوى المخططة 0.5% للصفقة، مركزان، حد خسارة اليوم 2%. الخروج 23:45 UTC (02:45 الرياض) بأول سعر حديث متاح.\n'
                 'صفقات موجة اليوم تصلك هنا مع تمييز حسابها. بقيت الحسابات الست السابقة للمقارنة.\n'
                 f"توسع الفحص إلى أعلى {self.policy['live_pair_target']} زوج USDT مؤهل حسب السيولة (أو المتاح إذا قل العدد). نتائج الثمانية أزواج التاريخية لا تثبت أداء التوسع.\n"
+                'أُلغي شرط وجود BTC فوق متوسطه للدخول في العملات الأخرى؛ بقي مانع هبوطه 2.5% أو أكثر خلال الساعة.\n'
                 'أرسل /strategies لنتائج المقارنة. لا يوجد تفعيل تلقائي لاستراتيجية غير معتمدة.')
             self.main.store.set_meta('research_policy_version',self.policy['version'])
 
@@ -71,9 +72,10 @@ class Research:
         if btc is None:
             return []
         latest = btc.iloc[-1]
-        regime = latest[4]>latest['sma200'] and latest[4]/btc.iloc[-5][4]-1 > -0.025
+        # Live policy: each asset supplies its own trend filter; BTC only blocks sharp falls.
+        regime = latest[4]/btc.iloc[-5][4]-1 > -0.025
         self.diagnostics.update(btc_regime=bool(regime), btc_close=float(latest[4]),
-                                btc_sma200=float(latest['sma200']),
+                                btc_sma200=float(latest['sma200']), btc_sma_gate_enabled=False,
                                 btc_hour_change_pct=float((latest[4]/btc.iloc[-5][4]-1)*100))
         for engine in self.shadows.values():
             engine.start(now)
@@ -107,7 +109,7 @@ class Research:
         elif now % 86400 >= 23*3600:
             reason = 'انتهت نافذة الدخول اليومية 23:00 UTC'
         elif not regime:
-            reason = 'مرشح BTC يمنع الدخول: السعر دون SMA200 أو هبوط الساعة يتجاوز الحد'
+            reason = 'هبوط BTC خلال الساعة بلغ 2.5% أو أكثر؛ إيقاف الدخول مؤقتًا'
         elif not by_name[DAY_WAVE]:
             reason = 'لم تكتمل إشارة الاختراق ثم أول تراجع ثم التأكيد في الأزواج المحللة'
         elif self.diagnostics['entered'][DAY_WAVE]:
