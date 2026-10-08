@@ -1,6 +1,6 @@
 {
-  "version": "2026-10-08-v4-btc-crash-only",
-  "interval": "15m",
+  "version": "2026-10-08-v5-five-minute",
+  "interval": "5m",
   "symbols": [
     "BTCUSDT",
     "ETHUSDT",
@@ -35,5 +35,6 @@
     "require_above_sma200": false,
     "block_hour_return_lte": -0.025,
     "require_fresh_closed_candles": true
-  }
+  },
+  "historical_interval": "15m"
 }

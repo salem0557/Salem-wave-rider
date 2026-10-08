@@ -124,3 +124,49 @@ def test_btc_below_average_allows_altcoin_but_sharp_drop_still_blocks(tmp_path, 
     finally:
         research.close()
         main.store.db.close()
+
+
+def five_minute_bars(n=320):
+    rows=bars(n)
+    for i,row in enumerate(rows):
+        row[0]=i*300000
+        row[6]=(i+1)*300000-1
+    return rows
+
+
+def test_five_minute_features_daily_volume_closed_candles_and_live_parity():
+    rows=five_minute_bars(1000)
+    full=features(pd.DataFrame(rows),300000)
+    live=closed_features(rows[-320:],1000*300000,300000)
+    assert live.iloc[-1]['qvol24']==sum(row[7] for row in rows[-288:])
+    for key in ['ema20','ema50','qvol24','score','stop_fraction']:
+        assert live.iloc[-1][key]==pytest.approx(full.iloc[-1][key])
+    signal=evaluate('ETHUSDT',rows[-320:],1000*300000,'donchian20',300000)
+    assert signal is not None and '5m' in signal.reason
+    assert evaluate('ETHUSDT',rows[-320:],999*300000+1000,'donchian20',300000) is None
+    assert closed_features(rows[-320:],1002*300000,300000) is None
+    broken=rows[-320:]
+    del broken[50]
+    assert evaluate('ETHUSDT',broken,1000*300000,'donchian20',300000) is None
+
+
+def test_five_minute_btc_filter_uses_full_hour_not_twenty_minutes(tmp_path):
+    cfg=replace(Config(),data_dir=str(tmp_path),research_enabled=True,candle_interval='5m',candle_limit=320)
+    main=Engine(cfg,Store(str(tmp_path/'main.db')))
+    research=Research(cfg,main)
+    eth=five_minute_bars()
+    btc=five_minute_bars()
+    for i,row in enumerate(btc):
+        price=96 if i>=312 else 100
+        row[1:5]=[price,price+.1,price-.1,price]
+    now=320*300
+    quotes={'ETHUSDT':{'bid':eth[-1][4],'ask':eth[-1][4],'ask_qty':1000,'ts':now}}
+    try:
+        research.analyze({'BTCUSDT':btc,'ETHUSDT':eth},quotes,now)
+        assert research.diagnostics['btc_hour_change_pct']==pytest.approx(-4)
+        assert research.diagnostics['btc_regime'] is False
+        assert research.diagnostics['interval']=='5m'
+        assert not any(e.s['positions'] for e in research.shadows.values())
+    finally:
+        research.close()
+        main.store.db.close()

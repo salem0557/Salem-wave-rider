@@ -23,7 +23,7 @@ def entry_mask(f):
     setup = trend & c.gt(f['prev55']) & f['rvol'].ge(2) & adx.ge(30)
     confirm = trend & c.gt(h.shift()) & f['rvol'].ge(1.25)
     # Setup warms from bar249; a max16-bar state is identical in a 320-bar live window.
-    continuity = f[0].diff().eq(900_000).rolling(249).sum().eq(249)
+    continuity = f[0].diff().eq(int(f['interval_ms'].iloc[0])).rolling(249).sum().eq(249)
     ready = continuity & f['qvol24'].ge(5_000_000) & f['atr'].gt(0)
     values = zip(ready, setup, confirm, c, l, f['ema20'], f['ema50'], f['prev55'], f['atr'])
     result = np.zeros(len(f),dtype=bool)

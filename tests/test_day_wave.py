@@ -28,8 +28,11 @@ def setup_frame():
     return f
 
 
-def test_breakout_needs_first_touch_then_confirmation_and_emits_once():
+@pytest.mark.parametrize('interval_ms', [300000, 900000])
+def test_breakout_needs_first_touch_then_confirmation_and_emits_once(interval_ms):
     f=setup_frame()
+    f[0]=f[0]//900000*interval_ms
+    f['interval_ms']=interval_ms
     assert entry_mask(f)[lambda x:x].index.tolist()==[303]
     assert entry_mask(f.iloc[20:])[lambda x:x].index.tolist()==[303]
     # An expired first touch cannot be replaced with a later, convenient pullback.

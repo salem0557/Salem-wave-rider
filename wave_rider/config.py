@@ -40,7 +40,7 @@ class Config:
         if base != "https://api.binance.com":
             raise ValueError("Use the official Binance endpoint; regional restrictions must not be bypassed")
         config = cls(data_dir=os.getenv("DATA_DIR", "./data"), binance_base_url=base,
-                     research_enabled=True, candle_interval="15m", candle_limit=320,
+                     research_enabled=True, candle_interval="5m", candle_limit=320,
                      telegram_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
                      telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
                      telegram_admin_id=os.getenv("TELEGRAM_ADMIN_USER_ID", ""))

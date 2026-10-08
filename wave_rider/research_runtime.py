@@ -31,6 +31,7 @@ class DayWaveStore(Store):
 class Research:
     def __init__(self, cfg, main):
         self.cfg, self.main = cfg, main
+        self.interval_ms = 300_000 if cfg.candle_interval == "5m" else 900_000
         self.diagnostics = {"reason": "لم يكتمل فحص السوق بعد", "at": None}
         self.policy = json.loads(Path(__file__).with_name('policy.json').read_text())
         approved = self.policy.get('approved_strategy')
@@ -54,6 +55,7 @@ class Research:
                 'صفقات موجة اليوم تصلك هنا مع تمييز حسابها. بقيت الحسابات الست السابقة للمقارنة.\n'
                 f"توسع الفحص إلى أعلى {self.policy['live_pair_target']} زوج USDT مؤهل حسب السيولة (أو المتاح إذا قل العدد). نتائج الثمانية أزواج التاريخية لا تثبت أداء التوسع.\n"
                 'أُلغي شرط وجود BTC فوق متوسطه للدخول في العملات الأخرى؛ بقي مانع هبوطه 2.5% أو أكثر خلال الساعة.\n'
+                f'إشارات الدخول تعتمد الآن على شموع {self.interval_ms//60_000} دقائق مغلقة.\n'
                 'أرسل /strategies لنتائج المقارنة. لا يوجد تفعيل تلقائي لاستراتيجية غير معتمدة.')
             self.main.store.set_meta('research_policy_version',self.policy['version'])
 
@@ -64,8 +66,8 @@ class Research:
             store.acknowledge(item['id'])
 
     def analyze(self, rows_by_symbol, quotes, now):
-        frames = {s:closed_features(rows,int(now*1000)) for s,rows in rows_by_symbol.items()}
-        self.diagnostics = {'at': now, 'valid_frames': sum(f is not None for f in frames.values()),
+        frames = {s:closed_features(rows,int(now*1000),self.interval_ms) for s,rows in rows_by_symbol.items()}
+        self.diagnostics = {'at': now, 'interval': f'{self.interval_ms//60_000}m', 'valid_frames': sum(f is not None for f in frames.values()),
                             'reason': 'بيانات BTC غير مكتملة أو قديمة', 'btc_regime': None,
                             'candidates': {}, 'entered': {}}
         btc = frames.get('BTCUSDT')
@@ -73,10 +75,11 @@ class Research:
             return []
         latest = btc.iloc[-1]
         # Live policy: each asset supplies its own trend filter; BTC only blocks sharp falls.
-        regime = latest[4]/btc.iloc[-5][4]-1 > -0.025
+        hour_return = latest[4]/btc.iloc[-(3_600_000//self.interval_ms+1)][4]-1
+        regime = hour_return > -0.025
         self.diagnostics.update(btc_regime=bool(regime), btc_close=float(latest[4]),
                                 btc_sma200=float(latest['sma200']), btc_sma_gate_enabled=False,
-                                btc_hour_change_pct=float((latest[4]/btc.iloc[-5][4]-1)*100))
+                                btc_hour_change_pct=float(hour_return*100))
         for engine in self.shadows.values():
             engine.start(now)
         by_name = {name:[] for name in CANDIDATES}

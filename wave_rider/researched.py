@@ -1,4 +1,4 @@
-"""Shared causal 15m features for historical evaluation and live paper signals."""
+"""Shared causal timeframe-aware features for historical evaluation and live paper signals."""
 import numpy as np
 import pandas as pd
 
@@ -20,15 +20,17 @@ def finite_ema(series, span):
     return pd.Series(values, index=series.index)
 
 
-def features(frame):
+def features(frame, interval_ms=INTERVAL_MS):
     f = frame.copy()
+    f['interval_ms'] = interval_ms
+    hour_bars = 3_600_000//interval_ms
     c, h, l, v = f[4], f[2], f[3], f[7]
     f['ema20'], f['ema50'] = finite_ema(c, 20), finite_ema(c, 50)
     f['sma200'] = c.rolling(200).mean()
     tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
     f['atr'] = tr.rolling(14).mean()
     f['rvol'] = v/v.rolling(20).mean().shift(1)
-    f['qvol24'] = v.rolling(96).sum()
+    f['qvol24'] = v.rolling(86_400_000//interval_ms).sum()
     f['prev20'] = h.rolling(20).max().shift(1)
     f['prev55'] = h.rolling(55).max().shift(1)
     delta = c.diff()
@@ -39,12 +41,12 @@ def features(frame):
     f['squeeze_recent'] = (4*c.rolling(20).std(ddof=0) < 3*tr.rolling(20).mean()).rolling(8).max().shift(1).fillna(0).astype(bool)
     f['strong_close'] = (c-l)/(h-l).replace(0,np.nan) >= 0.7
     f['trend'] = (c > f['sma200']) & (f['ema20'] > f['ema50']) & (c > f['ema20'])
-    f['not_extended'] = ((c/f['ema20']-1) <= 0.04) & ((c/c.shift(4)-1) < 0.06)
+    f['not_extended'] = ((c/f['ema20']-1) <= 0.04) & ((c/c.shift(hour_bars)-1) < 0.06)
     # Gaps poison the full indicator window; never fill missing market candles.
-    consecutive = f[0].diff().eq(INTERVAL_MS).rolling(299).sum().eq(299)
+    consecutive = f[0].diff().eq(interval_ms).rolling(299).sum().eq(299)
     f['valid'] = consecutive & f['qvol24'].ge(5_000_000) & c.gt(0) & f['atr'].gt(0)
     f['stop_fraction'] = (2*f['atr']/c).clip(0.01,0.05)
-    f['score'] = f['rvol'].clip(upper=10)*10+(c/c.shift(4)-1)*100
+    f['score'] = f['rvol'].clip(upper=10)*10+(c/c.shift(hour_bars)-1)*100
     return f
 
 
@@ -64,23 +66,23 @@ def masks(f):
 
 def from_feature(symbol, row, strategy):
     return Signal(symbol, int(row[0]), strategy, float(row[4]), float(row['stop_fraction']), float(row['score']),
-                  f"{strategy} 15m | حجم ×{row['rvol']:.2f} | ATR {row['atr']/row[4]:.2%}")
+                  f"{strategy} {int(row['interval_ms'])//60_000}m | حجم ×{row['rvol']:.2f} | ATR {row['atr']/row[4]:.2%}")
 
 
-def closed_features(rows, now_ms):
+def closed_features(rows, now_ms, interval_ms=INTERVAL_MS):
     f = pd.DataFrame(rows).apply(pd.to_numeric, errors='coerce')
     f = f[f[6] < now_ms].reset_index(drop=True)
-    if len(f) < 300 or now_ms-int(f.iloc[-1,6]) > INTERVAL_MS+60_000 or f.isna().any().any():
+    if len(f) < 300 or now_ms-int(f.iloc[-1,6]) > interval_ms+60_000 or f.isna().any().any():
         return None
     if not np.isfinite(f.to_numpy()).all() or (f[[1,2,3,4]] <= 0).any().any():
         return None
-    return features(f)
+    return features(f, interval_ms)
 
 
-def evaluate(symbol, rows, now_ms, strategy):
+def evaluate(symbol, rows, now_ms, strategy, interval_ms=INTERVAL_MS):
     if strategy not in CANDIDATES:
         return None
-    f = closed_features(rows, now_ms)
+    f = closed_features(rows, now_ms, interval_ms)
     if f is None:
         return None
     if bool(masks(f)[strategy].iloc[-1]):

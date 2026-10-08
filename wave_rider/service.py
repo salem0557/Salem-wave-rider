@@ -92,7 +92,7 @@ class Service:
                                for sym in self.engine.s['positions']):
                         break
                     self.store.save(self.engine.s, events=[dict(ts=now, kind='signal', **asdict(signal))])
-                    if now*1000-signal.candle_ms > (1_020_000 if self.research else 150_000):
+                    if now*1000-signal.candle_ms > (self.research.interval_ms+120_000 if self.research else 150_000):
                         continue
                     self.engine.enter(signal, self.market.quotes.get(signal.symbol), now,
                                       self.market.min_notional(signal.symbol))
