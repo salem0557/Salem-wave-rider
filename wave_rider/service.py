@@ -97,6 +97,8 @@ class Service:
                     log.info('Binance scan complete: market_ready=%s spot_pairs=%d eligible_usdt=%d analyzed=%d signals=%d comparison_accounts=%d primary_entries_enabled=%s',
                              self.status()['market_ready'], len(self.market.universe), eligible, len(symbols), len(signals),
                              len(self.research.shadows) if self.research else 0, not self.engine.s.get('research_blocked', False))
+                    if self.research:
+                        log.info('Research diagnostics: %s', self.research.diagnostics)
                     self.last_status_log = time.time()
             except asyncio.CancelledError:
                 raise

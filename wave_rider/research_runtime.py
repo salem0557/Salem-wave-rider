@@ -1,5 +1,7 @@
 """Forward paper comparisons isolated from the user's existing $300 ledger."""
 import json
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .engine import Engine, valid_quote
@@ -29,6 +31,7 @@ class DayWaveStore(Store):
 class Research:
     def __init__(self, cfg, main):
         self.cfg, self.main = cfg, main
+        self.diagnostics = {"reason": "لم يكتمل فحص السوق بعد", "at": None}
         self.policy = json.loads(Path(__file__).with_name('policy.json').read_text())
         approved = self.policy.get('approved_strategy')
         if approved is not None and (approved not in CANDIDATES or not all(self.policy['promotion_checks'].values())):
@@ -60,11 +63,17 @@ class Research:
 
     def analyze(self, rows_by_symbol, quotes, now):
         frames = {s:closed_features(rows,int(now*1000)) for s,rows in rows_by_symbol.items()}
+        self.diagnostics = {'at': now, 'valid_frames': sum(f is not None for f in frames.values()),
+                            'reason': 'بيانات BTC غير مكتملة أو قديمة', 'btc_regime': None,
+                            'candidates': {}, 'entered': {}}
         btc = frames.get('BTCUSDT')
         if btc is None:
             return []
         latest = btc.iloc[-1]
         regime = latest[4]>latest['sma200'] and latest[4]/btc.iloc[-5][4]-1 > -0.025
+        self.diagnostics.update(btc_regime=bool(regime), btc_close=float(latest[4]),
+                                btc_sma200=float(latest['sma200']),
+                                btc_hour_change_pct=float((latest[4]/btc.iloc[-5][4]-1)*100))
         for engine in self.shadows.values():
             engine.start(now)
         by_name = {name:[] for name in CANDIDATES}
@@ -75,11 +84,36 @@ class Research:
                 for name,mask in masks(frame).items():
                     if bool(mask.iloc[-1]):
                         by_name[name].append(from_feature(symbol,frame.iloc[-1],name))
+        self.diagnostics['candidates'] = {name:len(items) for name,items in by_name.items()}
         for name,engine in self.shadows.items():
+            self.diagnostics['entered'][name] = 0
             if self.main.s['paused'] or not all(valid_quote(quotes.get(s),now,self.cfg.stale_seconds) for s in engine.s['positions']):
                 continue
             for signal in sorted(by_name[name],key=lambda s:(-s.score,s.symbol)):
-                engine.enter(signal,quotes.get(signal.symbol),now)
+                if engine.enter(signal,quotes.get(signal.symbol),now):
+                    self.diagnostics['entered'][name] += 1
+        day = self.shadows[DAY_WAVE]
+        self.diagnostics['accounts'] = {n: {'open': len(e.s['positions']), 'closed': e.s['closed_trades'],
+                                         'paused': e.s['paused'], 'halted': e.s['daily_halt'],
+                                         'terminal': e.s['terminal']} for n,e in self.shadows.items()}
+        self.diagnostics['primary_paused'] = self.main.s['paused']
+        if self.main.s['paused'] or day.s['paused']:
+            reason = 'إيقاف يدوي للدخول'
+        elif day.s['terminal']:
+            reason = day.s['terminal']
+        elif day.s['daily_halt']:
+            reason = 'حد خسارة اليوم'
+        elif now % 86400 >= 23*3600:
+            reason = 'انتهت نافذة الدخول اليومية 23:00 UTC'
+        elif not regime:
+            reason = 'مرشح BTC يمنع الدخول: السعر دون SMA200 أو هبوط الساعة يتجاوز الحد'
+        elif not by_name[DAY_WAVE]:
+            reason = 'لم تكتمل إشارة الاختراق ثم أول تراجع ثم التأكيد في الأزواج المحللة'
+        elif self.diagnostics['entered'][DAY_WAVE]:
+            reason = 'تم تنفيذ دخول ورقي في هذه الدورة'
+        else:
+            reason = 'ظهرت إشارة؛ لم تنفذ بسبب قيود المحفظة أو السعر أو تكرار الإشارة'
+        self.diagnostics['reason'] = reason
         self.relay_day_messages()
         return by_name[self.approved] if self.approved else []
 
@@ -97,6 +131,10 @@ class Research:
             lines.append(f"{name}: {e.equity():.2f} USDT | {e.equity()-300:+.2f} | مكتملة {e.s['closed_trades']} | مفتوحة {len(e.s['positions'])}")
         day = self.shadows[DAY_WAVE]
         lines.append(f"🌊 موجة اليوم | نتيجة اليوم {day.equity()-day.s['day_equity']:+.2f} USDT | الحالة: {day.s['terminal'] or ('حد خسارة اليوم' if day.s['daily_halt'] else 'إيقاف يدوي' if self.main.s['paused'] else 'اختبار أمامي')}")
+        stamp = self.diagnostics.get('at')
+        checked = datetime.fromtimestamp(stamp, timezone.utc).strftime('%H:%M UTC') if stamp else 'لا يوجد'
+        stale = ' (قديمة)' if stamp and time.time()-stamp > 120 else ''
+        lines.append(f"آخر فحص {checked}{stale}: {self.diagnostics['reason']}")
         lines.append('هذه مقارنة تجريبية، لا تثبت ربحية ولا تستخدم المحفظة الأساسية. /pause يمنع دخول الجميع؛ المخارج تستمر.')
         return '\n'.join(lines)
 
