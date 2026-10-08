@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "registered_before_results": true,
+  "interval": "15m",
+  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT"],
+  "start": "2024-01-01",
+  "development_end": "2025-01-01",
+  "selection_end": "2026-01-01",
+  "end_exclusive": "2026-10-01",
+  "candidates": ["donchian20", "donchian55", "ema_pullback", "squeeze_breakout", "ema_cross", "rsi_rebound"],
+  "base_costs": {"fee_per_side": 0.001, "slippage_per_side": 0.0005, "full_spread": 0.0004},
+  "stress_costs": {"fee_per_side": 0.001, "slippage_per_side": 0.0015, "full_spread": 0.001},
+  "capital": 300,
+  "selection": "Rank only on 2025 median seven-day return, then profit factor; select one. No retuning after seeing 2026.",
+  "promotion_gate": {"selection_positive_net_pnl": true, "holdout_positive_net_pnl": true, "holdout_profit_factor_min": 1.1, "holdout_closed_trades_min": 60, "holdout_positive_weeks_fraction_min": 0.5, "stress_holdout_positive_net_pnl": true},
+  "if_no_candidate_passes": "No new entries; keep scanning and managing existing exits. Publish failed results. No silent fallback to unvalidated strategy.",
+  "limitations": ["Fixed liquid survivor universe: not a survivorship-free Binance-wide study", "OHLC cannot reconstruct order book or intrabar path", "No statistical proof of an edge from one holdout", "15m rules do not validate original 1m rules", "Each non-overlapping seven-day trial starts at 300, matching the requested experiment; no claimed continuous annual return"]
+}
