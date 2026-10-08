@@ -1,0 +1,15 @@
+{
+  "version": "day-wave-v1",
+  "registered_before_this_variant_results": true,
+  "historical_data_already_used_by_prior_research": true,
+  "strategy": "day_wave",
+  "interval": "15m",
+  "setup": "Close above previous 55 highs, relative quote volume >=2, close>SMA200, EMA20>EMA50, close>EMA20, strong close top30%, extension<=4%, 1h change<6%, finite simple-smoothed ADX14>=30.",
+  "entry": "Only first EMA20 touch in the following 16 bars. Keep close >= original breakout level minus 0.5 setup ATR and above EMA50. Within 4 bars after touch, close above previous high with trend, strong close, rvol>=1.25. One signal per setup; new breakouts do not replace an active setup.",
+  "exit": "Stop 2ATR clamped1-5%; half off2R, net-cost breakeven then trail1R. No entries after23:00UTC; flatten23:45UTC or first fresh quote after an outage. Max24h. No leverage or averaging down.",
+  "risk": {"risk_per_trade": 0.005, "max_positions": 2, "max_position_fraction": 0.2, "daily_loss_limit": 0.02, "max_drawdown": 0.1},
+  "evaluation": "Independent daily300USDT trials for2024,2025,Jan-Sep2026 at base and stress costs from protocol.json; no parameter search. Past data is exploratory reused data, NOT untouched holdout.",
+  "deployment": "Isolated seven-day forward paper account only; keep main approval null regardless of reused historical outcomes. Telegram must label this account. No automatic promotion or capital reset.",
+  "sources": ["https://qullamaggie.com/my-3-timeless-setups-that-have-made-me-tens-of-millions/", "https://lindaraschke.net/wp-content/uploads/2026/03/raschke_pt2_0304.pdf", "https://tradingblox.com/originalturtles/originalturtlerules.htm", "https://www.peterlbrandt.com/a-collection-of-member-qas/"],
+  "attribution": "Original intraday adaptation of breakout/first-pullback/volatility-risk concepts, not a reproduction or endorsement of any trader. Simple rolling ADX, no stock news gaps, no shorting, no Turtle pyramiding. Brandt discretionary chart patterns are not claimed implemented."
+}
