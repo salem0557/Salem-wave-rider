@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-08-v5-five-minute",
+  "version": "2026-10-08-v6-flexible-entry",
   "interval": "5m",
   "symbols": [
     "BTCUSDT",
@@ -36,5 +36,13 @@
     "block_hour_return_lte": -0.025,
     "require_fresh_closed_candles": true
   },
-  "historical_interval": "15m"
+  "historical_interval": "15m",
+  "day_wave_flex": {
+    "status": "isolated_forward_paper_only",
+    "breakout": "close above prior55 highs, rvol>=1.5",
+    "rebound": "previous low touches EMA20, previous close above EMA50, confirmation close above previous high, rvol>=1.25",
+    "entry_logic": "breakout OR rebound with existing trend, strong close, extension and liquidity guards",
+    "risk": "same day_wave configuration",
+    "historically_validated": false
+  }
 }

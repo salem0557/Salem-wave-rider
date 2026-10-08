@@ -104,3 +104,60 @@ def test_day_wave_uses_isolated_config_and_durable_labeled_telegram(tmp_path):
     assert len(main.store.pending())==1
     restored.close()
     main.store.db.close()
+
+
+def test_flexible_breakout_accepts_1point5_volume_without_pullback_sequence():
+    from wave_rider.day_wave import flexible_mask
+    f=setup_frame()
+    f.loc[300,'rvol']=1.5
+    assert flexible_mask(f).iloc[300]
+    assert not entry_mask(f).iloc[300]
+    f.loc[300,'rvol']=1.499
+    assert not flexible_mask(f).iloc[300]
+
+
+def test_flexible_rebound_does_not_require_prior_breakout():
+    from wave_rider.day_wave import flexible_mask
+    f=setup_frame()
+    f['prev55']=f[4]+10
+    f.loc[302,3]=f.loc[302,'ema20']
+    f.loc[303,'rvol']=1.25
+    assert flexible_mask(f).iloc[303]
+    assert not entry_mask(f).any()
+    f.loc[303,4]=f.loc[302,2]  # Must actually close above the prior high.
+    assert not flexible_mask(f).iloc[303]
+
+
+@pytest.mark.parametrize('guard', ['valid','trend','not_extended','strong_close'])
+def test_flexible_entry_preserves_data_trend_and_extension_guards(guard):
+    from wave_rider.day_wave import flexible_mask
+    f=setup_frame()
+    assert flexible_mask(f).iloc[300]
+    f.loc[300,guard]=False
+    assert not flexible_mask(f).iloc[300]
+
+
+def test_flexible_account_preserves_risk_and_isolates_ledger_and_notifications(tmp_path):
+    cfg=replace(Config(),data_dir=str(tmp_path))
+    main=Engine(cfg,Store(str(tmp_path/'main.db')))
+    research=Research(cfg,main)
+    flex=research.shadows['day_wave_flex']
+    original=research.shadows['day_wave']
+    try:
+        assert flex.cfg==original.cfg
+        now=1_800_000_000//86400*86400+12*3600
+        signal=Signal('ETHUSDT',int(now*1000),'day_wave_flex',100,.02,1,'test')
+        q={'bid':100.,'ask':100.,'ask_qty':1000,'ts':now}
+        assert flex.enter(signal,q,now)
+        assert not flex.enter(signal,q,now)  # No repeated fill on the same signal.
+        assert original.s['cash']==300 and not original.s['positions']
+        assert main.s['cash']==300 and not main.s['positions']
+        research.relay_day_messages()
+        assert any('موجة اليوم المرنة' in m['message'] for m in main.store.pending())
+        saved=flex.s.copy()
+    finally:
+        research.close()
+    restored=Research(cfg,main)
+    assert restored.shadows['day_wave_flex'].s==saved
+    restored.close()
+    main.store.db.close()

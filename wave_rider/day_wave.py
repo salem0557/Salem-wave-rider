@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 NAME = 'day_wave'
+FLEX_NAME = 'day_wave_flex'
 
 
 def config(base):
@@ -48,3 +49,13 @@ def entry_mask(f):
         if breakout:
             active = (i, level-.5*atr, None)
     return pd.Series(result,index=f.index) & f['valid']
+
+
+def flexible_mask(f):
+    """Either confirmed breakout or trend rebound; same data and risk guards."""
+    c = f[4]
+    guard = f['valid'] & f['trend'] & f['not_extended'] & f['strong_close']
+    breakout = c.gt(f['prev55']) & f['rvol'].ge(1.5)
+    rebound = (f[3].shift().le(f['ema20'].shift()) & f[4].shift().gt(f['ema50'].shift())
+               & c.gt(f[2].shift()) & f['rvol'].ge(1.25))
+    return guard & (breakout | rebound)

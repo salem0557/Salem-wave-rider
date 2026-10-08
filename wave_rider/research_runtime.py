@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .engine import Engine, valid_quote
-from .day_wave import NAME as DAY_WAVE, config as day_config
+from .day_wave import NAME as DAY_WAVE, FLEX_NAME, config as day_config
 from .researched import CANDIDATES, closed_features, from_feature, masks
 from .store import Store
 
@@ -28,6 +28,10 @@ class DayWaveStore(Store):
         super().enqueue(self.prefix+message)
 
 
+class FlexibleStore(DayWaveStore):
+    prefix = '🌊 موجة اليوم المرنة — حساب ورقي مستقل 300 USDT، ليس المحفظة الأساسية\n'
+
+
 class Research:
     def __init__(self, cfg, main):
         self.cfg, self.main = cfg, main
@@ -40,8 +44,8 @@ class Research:
         self.approved = approved
         self.main.s['research_blocked'] = approved is None
         self.main.store.save(self.main.s)
-        self.shadows = {name: Engine(day_config(cfg) if name == DAY_WAVE else cfg,
-                            (DayWaveStore if name == DAY_WAVE else ShadowStore)(str(Path(cfg.data_dir)/f'shadow_{name}.db')))
+        self.shadows = {name: Engine(day_config(cfg) if name in (DAY_WAVE, FLEX_NAME) else cfg,
+                            (FlexibleStore if name == FLEX_NAME else DayWaveStore if name == DAY_WAVE else ShadowStore)(str(Path(cfg.data_dir)/f'shadow_{name}.db')))
                         for name in CANDIDATES}
 
     def announce(self):
@@ -56,14 +60,17 @@ class Research:
                 f"توسع الفحص إلى أعلى {self.policy['live_pair_target']} زوج USDT مؤهل حسب السيولة (أو المتاح إذا قل العدد). نتائج الثمانية أزواج التاريخية لا تثبت أداء التوسع.\n"
                 'أُلغي شرط وجود BTC فوق متوسطه للدخول في العملات الأخرى؛ بقي مانع هبوطه 2.5% أو أكثر خلال الساعة.\n'
                 f'إشارات الدخول تعتمد الآن على شموع {self.interval_ms//60_000} دقائق مغلقة.\n'
+                'أضيفت موجة اليوم المرنة: اختراق مؤكد بحجم 1.5× أو ارتداد مع الاتجاه، دون انتظار التسلسل الكامل.\n'
+                'حساب ورقي مستقل جديد 300 USDT للمقارنة مع النسخة السابقة؛ نفس الوقف والسيولة والمخاطرة. تصلك صفقاته بعنوان منفصل. لم تثبت ربحية النسخة الأخف.\n'
                 'أرسل /strategies لنتائج المقارنة. لا يوجد تفعيل تلقائي لاستراتيجية غير معتمدة.')
             self.main.store.set_meta('research_policy_version',self.policy['version'])
 
     def relay_day_messages(self):
-        store = self.shadows[DAY_WAVE].store
-        for item in store.pending():
-            self.main.store.enqueue(item['message'])
-            store.acknowledge(item['id'])
+        for name in (DAY_WAVE, FLEX_NAME):
+            store = self.shadows[name].store
+            for item in store.pending():
+                self.main.store.enqueue(item['message'])
+                store.acknowledge(item['id'])
 
     def analyze(self, rows_by_symbol, quotes, now):
         frames = {s:closed_features(rows,int(now*1000),self.interval_ms) for s,rows in rows_by_symbol.items()}
@@ -98,7 +105,7 @@ class Research:
             for signal in sorted(by_name[name],key=lambda s:(-s.score,s.symbol)):
                 if engine.enter(signal,quotes.get(signal.symbol),now):
                     self.diagnostics['entered'][name] += 1
-        day = self.shadows[DAY_WAVE]
+        day = self.shadows[FLEX_NAME]
         self.diagnostics['accounts'] = {n: {'open': len(e.s['positions']), 'closed': e.s['closed_trades'],
                                          'paused': e.s['paused'], 'halted': e.s['daily_halt'],
                                          'terminal': e.s['terminal']} for n,e in self.shadows.items()}
@@ -113,9 +120,9 @@ class Research:
             reason = 'انتهت نافذة الدخول اليومية 23:00 UTC'
         elif not regime:
             reason = 'هبوط BTC خلال الساعة بلغ 2.5% أو أكثر؛ إيقاف الدخول مؤقتًا'
-        elif not by_name[DAY_WAVE]:
-            reason = 'لم تكتمل إشارة الاختراق ثم أول تراجع ثم التأكيد في الأزواج المحللة'
-        elif self.diagnostics['entered'][DAY_WAVE]:
+        elif not by_name[FLEX_NAME]:
+            reason = 'النسخة المرنة: لا اختراق مؤكد بحجم 1.5× ولا ارتداد مع الاتجاه مكتمل'
+        elif self.diagnostics['entered'][FLEX_NAME]:
             reason = 'تم تنفيذ دخول ورقي في هذه الدورة'
         else:
             reason = 'ظهرت إشارة؛ لم تنفذ بسبب قيود المحفظة أو السعر أو تكرار الإشارة'
@@ -135,13 +142,14 @@ class Research:
                  'المقارنة الأمامية الحالية (كل حساب بدأ بـ300):']
         for name,e in sorted(self.shadows.items(),key=lambda item:item[1].equity(),reverse=True):
             lines.append(f"{name}: {e.equity():.2f} USDT | {e.equity()-300:+.2f} | مكتملة {e.s['closed_trades']} | مفتوحة {len(e.s['positions'])}")
-        day = self.shadows[DAY_WAVE]
-        lines.append(f"🌊 موجة اليوم | نتيجة اليوم {day.equity()-day.s['day_equity']:+.2f} USDT | الحالة: {day.s['terminal'] or ('حد خسارة اليوم' if day.s['daily_halt'] else 'إيقاف يدوي' if self.main.s['paused'] else 'اختبار أمامي')}")
+        day = self.shadows[FLEX_NAME]
+        lines.append(f"🌊 موجة اليوم المرنة | نتيجة اليوم {day.equity()-day.s['day_equity']:+.2f} USDT | الحالة: {day.s['terminal'] or ('حد خسارة اليوم' if day.s['daily_halt'] else 'إيقاف يدوي' if self.main.s['paused'] else 'اختبار أمامي')}")
         stamp = self.diagnostics.get('at')
         checked = datetime.fromtimestamp(stamp, timezone.utc).strftime('%H:%M UTC') if stamp else 'لا يوجد'
         stale = ' (قديمة)' if stamp and time.time()-stamp > 120 else ''
         lines.append(f"آخر فحص {checked}{stale}: {self.diagnostics['reason']}")
         lines.append(f"شموع صالحة في آخر فحص: {self.diagnostics.get('valid_frames', 0)} | المستهدف {self.policy['live_pair_target']} زوج حسب السيولة")
+        lines.append('بدايات الحسابات مختلفة؛ المقارنة وصفية وليست اختبارًا متزامنًا مضبوطًا.')
         lines.append('هذه مقارنة تجريبية، لا تثبت ربحية ولا تستخدم المحفظة الأساسية. /pause يمنع دخول الجميع؛ المخارج تستمر.')
         return '\n'.join(lines)
 
