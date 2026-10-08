@@ -52,6 +52,7 @@ class Research:
                 'موجة اليوم خاسرة أيضًا في الاختبار التاريخي بعد التكاليف وفرصها قليلة. البيانات مستخدمة سابقًا؛ هذا اختبار أمامي وليس اعتمادًا للربحية.\n'
                 'المخاطرة القصوى المخططة 0.5% للصفقة، مركزان، حد خسارة اليوم 2%. الخروج 23:45 UTC (02:45 الرياض) بأول سعر حديث متاح.\n'
                 'صفقات موجة اليوم تصلك هنا مع تمييز حسابها. بقيت الحسابات الست السابقة للمقارنة.\n'
+                f"توسع الفحص إلى أعلى {self.policy['live_pair_target']} زوج USDT مؤهل حسب السيولة (أو المتاح إذا قل العدد). نتائج الثمانية أزواج التاريخية لا تثبت أداء التوسع.\n"
                 'أرسل /strategies لنتائج المقارنة. لا يوجد تفعيل تلقائي لاستراتيجية غير معتمدة.')
             self.main.store.set_meta('research_policy_version',self.policy['version'])
 
@@ -135,6 +136,7 @@ class Research:
         checked = datetime.fromtimestamp(stamp, timezone.utc).strftime('%H:%M UTC') if stamp else 'لا يوجد'
         stale = ' (قديمة)' if stamp and time.time()-stamp > 120 else ''
         lines.append(f"آخر فحص {checked}{stale}: {self.diagnostics['reason']}")
+        lines.append(f"شموع صالحة في آخر فحص: {self.diagnostics.get('valid_frames', 0)} | المستهدف {self.policy['live_pair_target']} زوج حسب السيولة")
         lines.append('هذه مقارنة تجريبية، لا تثبت ربحية ولا تستخدم المحفظة الأساسية. /pause يمنع دخول الجميع؛ المخارج تستمر.')
         return '\n'.join(lines)
 

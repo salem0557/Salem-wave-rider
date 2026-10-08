@@ -23,7 +23,7 @@ class Binance:
         self.last_deep = {}
         self.health_error = None
         self.weight = 0
-        self.research_symbols = None
+        self.research_pair_limit = None
 
     async def get(self, path, params=None):
         if time.time() < self.blocked_until:
@@ -104,15 +104,19 @@ class Binance:
             if daily < -15 or daily > 80:
                 continue
             score = momentum*10 + min(max(daily, 0), 20)/10 + math.log10(max(volume, 1))/10
-            candidates.append((score, symbol))
+            candidates.append((score, symbol, volume))
         candidates.sort(reverse=True)
         # 12 momentum leaders + 8 rotating eligible symbols prevent permanent blind spots.
-        selected = [s for _, s in candidates[:12]]
-        rotation = sorted((s for _, s in candidates if s not in selected), key=lambda s: self.last_deep.get(s, 0))
+        selected = [s for _, s, _ in candidates[:12]]
+        rotation = sorted((s for _, s, _ in candidates if s not in selected), key=lambda s: self.last_deep.get(s, 0))
         selected += rotation[:8]
-        if self.research_symbols is not None:
-            # Fetch all validated symbols, including BTC for the shared regime filter.
-            selected = [s for s in self.research_symbols if s in self.universe]
+        if self.research_pair_limit is not None:
+            # Dynamic liquid universe; historical eight-symbol results do not validate it.
+            liquid = sorted(candidates, key=lambda item: (-item[2], item[1]))
+            selected = [s for _, s, _ in liquid[:self.research_pair_limit]]
+            # BTC is also a required market-regime input, even if not entry-eligible.
+            if 'BTCUSDT' in self.universe and 'BTCUSDT' not in selected:
+                selected.append('BTCUSDT')
         for s in selected:
             self.last_deep[s] = now
         self.last_scan = now

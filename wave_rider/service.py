@@ -19,13 +19,14 @@ class Service:
         self.market = Binance(cfg)
         self.research = Research(cfg, self.engine) if cfg.research_enabled else None
         if self.research:
-            self.market.research_symbols = self.research.policy['symbols']
+            self.market.research_pair_limit = self.research.policy['live_pair_target']
         self.telegram = Telegram(cfg, store, self.engine, self.status_text,
                                  self.research.report if self.research else None)
         self.last_error = None
         self.heartbeat = time.time()
         self.scanned_count = 0
         self.eligible_count = 0
+        self.analyzed_count = 0
         self.last_alert = 0
         self.last_status_log = 0
         self.tasks = []
@@ -39,6 +40,7 @@ class Service:
             'last_scan_at': self.market.last_scan or None,
             'spot_pairs': len(self.market.universe), 'observed_pairs': self.scanned_count,
             'eligible_usdt_pairs': self.eligible_count,
+            'analyzed_pairs': self.analyzed_count,
             'error': self.last_error,
             'research_mode': self.cfg.research_enabled,
             'telegram_configured': bool(self.cfg.telegram_token and self.cfg.telegram_chat_id),
@@ -48,7 +50,7 @@ class Service:
         s = self.status()
         return (f"المصدر: Binance Spot | البيانات: {'حديثة' if s['market_ready'] else 'غير جاهزة / قديمة'}\n"
                 f"الأزواج الفورية: {s['spot_pairs']} | المؤهلة USDT: {s['eligible_usdt_pairs']}\n"
-                f"فحص شموع: {self.cfg.candle_interval} | {'8 أزواج في مقارنة مستقلة؛ لا دخول للمحفظة الأساسية' if self.research and not self.research.approved else 'استراتيجيات الدخول مفعلة'}\n"
+                f"أزواج آخر دورة مكتملة: {s['analyzed_pairs']} | فاصل {self.cfg.candle_interval} | {'مقارنة مستقلة؛ لا دخول للمحفظة الأساسية' if self.research and not self.research.approved else 'استراتيجيات الدخول مفعلة'}\n"
                 f"الخطأ: {s['error'] or 'لا يوجد'}")
 
     def error(self, message):
@@ -81,6 +83,7 @@ class Service:
                     await asyncio.sleep(0.15)
                 if self.research:
                     signals = self.research.analyze(research_rows, self.market.quotes, time.time())
+                self.analyzed_count = len(symbols)
                 self.last_error = None
                 for signal in sorted(signals, key=lambda s: s.score, reverse=True):
                     now = time.time()

@@ -147,3 +147,28 @@ async def test_group_commands_require_admin_and_old_commands_ignored(tmp_path):
     await bot.handle(msg)
     assert engine.s['paused']
     await bot.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('count', [90, 45])
+async def test_research_scans_top70_liquid_pairs_or_reports_available(count):
+    market = Binance(Config())
+    market.research_pair_limit = 70
+    symbols = ['BTCUSDT']+[f'COIN{i}USDT' for i in range(count-1)]
+    market.universe = {s: {'baseAsset': s[:-4], 'quoteAsset': 'USDT'} for s in symbols}
+    market.universe['USDCUSDT'] = {'baseAsset': 'USDC', 'quoteAsset': 'USDT'}
+    market.universe['ILLIQUIDUSDT'] = {'baseAsset': 'ILLIQUID', 'quoteAsset': 'USDT'}
+    market.last_universe = time.time()
+    rows = [{'symbol': s, 'lastPrice': '100', 'quoteVolume': str(200_000_000-i*1_000_000),
+             'priceChangePercent': '2'} for i,s in enumerate(symbols)]
+    rows += [{'symbol': 'USDCUSDT', 'lastPrice': '1', 'quoteVolume': '999999999', 'priceChangePercent': '0'},
+             {'symbol': 'ILLIQUIDUSDT', 'lastPrice': '1', 'quoteVolume': '100', 'priceChangePercent': '2'}]
+    async def get(path, params=None):
+        assert path=='ticker/24hr'
+        return list(reversed(rows))  # Exchange response order must not control selection.
+    market.get = get
+    selected, observed, eligible = await market.shortlist()
+    assert selected == symbols[:70]
+    assert len(selected)==min(count,70) and eligible==count
+    assert observed==count+2
+    await market.close()

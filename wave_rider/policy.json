@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-08-v2-day-wave",
+  "version": "2026-10-08-v3-70-pairs",
   "interval": "15m",
   "symbols": [
     "BTCUSDT",
@@ -28,5 +28,7 @@
     "historical_report": "reports/day_wave.json",
     "protocol": "research/day_wave_protocol.json",
     "primary_approved": false
-  }
+  },
+  "live_pair_target": 70,
+  "live_universe": "Top 70 eligible spot USDT pairs by 24h quote volume; BTC additionally required for regime. If fewer qualify, report actual count without weakening eligibility."
 }
