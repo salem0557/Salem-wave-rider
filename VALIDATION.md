@@ -1,11 +1,12 @@
-# Validation record
+# Validation record — 2026-10-08
 
-- **24 tests passed** locally, covering the paper engine, strategy, connectors, and an end-to-end mocked scanner-to-ledger flow. These check behavior, not trading profitability.
-- Actual service startup passed: `/healthz` returned 200; `/readyz` correctly returned 503 while Binance was restricted; `/` and `/docs` returned 404 (no application page). CSV export and dependency consistency checks passed.
-- The execution environment's request to `https://api.binance.com/api/v3/ping` returned **HTTP 451** (location restricted). No live price feed, historical performance result, or live Telegram delivery is claimed.
-- The service deliberately preserves a degraded market state instead of generating market prices, moving to another exchange, or bypassing geographic restrictions.
-- Source repository designated by the owner: `salem0557/Salem-wave-rider`.
-- Railway credentials/tools were not confirmed available in this session. Railway configuration is included, but production deployment is not claimed.
-- Telegram credentials are intentionally deferred by the user. The worker can run and store notifications until credentials are configured.
+- **29 tests passed** locally: paper ledger accounting, fees, gap exits, partial exits, limits, persistence, Telegram authorization/delivery handling, causal features, live-vs-batch indicator parity, adverse intrabar order, and isolation/restart of the six comparison accounts.
+- Research inputs: **264 SHA-256-verified Binance public archives**, **771,072 complete 15-minute bars**, eight specified assets, January 2024 through September 2026. Reproducible manifest and results are in `reports/`.
+- The selection protocol was committed before results. The 2025 candidate selection was committed before running the 2026 holdout. **No candidate passed promotion**; these are failed strategy tests, not a claim of profitable trading.
+- Full assumptions, all selection results, final holdout, stress costs, and limitations: [RESEARCH_REPORT.md](RESEARCH_REPORT.md).
+- Initial local HTTP smoke checks: `/healthz` 200, `/readyz` 503 under the local Binance location restriction, `/` and `/docs` 404. CSV export and dependency consistency checks passed.
+- The local execution environment receives Binance API HTTP 451. Research uses Binance's separately published historical archives, not a live-price fallback. Live regional restrictions are not bypassed.
+- Railway deployment of the preceding release was verified SUCCESS with a permanent `/data` volume, `market_ready=True`, and a confirmed Telegram delivery. Research-release deployment verification is performed against its own commit and deployment logs.
+- No real orders, no Binance credentials, and no OpenRouter calls are implemented.
 
-Run `pytest -q` and `python -m scripts.preflight` in the intended deployment environment before treating the experiment as active. A successful liveness check is not proof of market readiness.
+Run `pytest -q` to check behavior, and inspect `/status` plus `/strategies` for current runtime state. A liveness check alone is not proof of market readiness or profitability.

@@ -65,14 +65,22 @@ def from_feature(symbol, row, strategy):
                   f"{strategy} 15m | حجم ×{row['rvol']:.2f} | ATR {row['atr']/row[4]:.2%}")
 
 
-def evaluate(symbol, rows, now_ms, strategy):
-    if strategy not in CANDIDATES:
-        return None
+def closed_features(rows, now_ms):
     f = pd.DataFrame(rows).apply(pd.to_numeric, errors='coerce')
     f = f[f[6] < now_ms].reset_index(drop=True)
     if len(f) < 300 or now_ms-int(f.iloc[-1,6]) > INTERVAL_MS+60_000 or f.isna().any().any():
         return None
-    f = features(f)
+    if not np.isfinite(f.to_numpy()).all() or (f[[1,2,3,4]] <= 0).any().any():
+        return None
+    return features(f)
+
+
+def evaluate(symbol, rows, now_ms, strategy):
+    if strategy not in CANDIDATES:
+        return None
+    f = closed_features(rows, now_ms)
+    if f is None:
+        return None
     if bool(masks(f)[strategy].iloc[-1]):
         return from_feature(symbol, f.iloc[-1], strategy)
     return None

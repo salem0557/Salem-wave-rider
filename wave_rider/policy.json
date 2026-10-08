@@ -1,0 +1,26 @@
+{
+  "version": "2026-10-08-v1",
+  "interval": "15m",
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "ADAUSDT",
+    "AVAXUSDT"
+  ],
+  "selected_candidate": "ema_cross",
+  "approved_strategy": null,
+  "promotion_checks": {
+    "selection_net_positive": false,
+    "holdout_net_positive": false,
+    "holdout_profit_factor": false,
+    "holdout_trades": true,
+    "positive_weeks": false,
+    "stress_net_positive": false
+  },
+  "holdout_mean_week_return_pct": -0.6722655219920258,
+  "note": "No new primary entries unless a strategy passes the fixed historical gate. Shadow comparisons never spend or modify the primary ledger."
+}

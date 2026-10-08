@@ -41,7 +41,7 @@ class Engine:
                 f"التراجع الحالي من القمة: {1-eq/s['peak_equity']:.2%} | نتيجة اليوم: {eq-s['day_equity']:+.2f}\n"
                 f"صفقات مفتوحة: {len(s['positions'])} | مكتملة: {s['closed_trades']} | رابحة: {s['wins']}\n"
                 f"الهدف التجريبي: {self.cfg.target_equity:.0f} (غير مضمون) | المتبقي: {remaining}\n"
-                f"الحالة: {s['terminal'] or ('إيقاف يدوي' if s['paused'] else 'حد خسارة يومي' if s['daily_halt'] else 'جاهز')}\n"
+                f"الحالة: {s['terminal'] or ('إيقاف يدوي' if s['paused'] else 'حد خسارة يومي' if s['daily_halt'] else 'لا استراتيجية معتمدة؛ المخارج مستمرة' if s.get('research_blocked') else 'جاهز')}\n"
                 'التقييم بآخر سعر معروف؛ انقطاع البيانات يجعل التقييم قديمًا.')
 
     def positions_report(self):
@@ -78,7 +78,7 @@ class Engine:
     def enter(self, signal: Signal, quote, now, min_notional=5.0):
         s, cfg = self.s, self.cfg
         self._limits(now)
-        if s['paused'] or s['daily_halt'] or s['terminal']:
+        if s['paused'] or s['daily_halt'] or s['terminal'] or s.get('research_blocked'):
             self.store.save(s)
             return False
         if signal.symbol in s['positions'] or len(s['positions']) >= cfg.max_positions:

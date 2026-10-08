@@ -7,6 +7,7 @@ from .engine import Engine, day_key, valid_quote
 from .market import Binance, MarketError
 from .strategy import evaluate
 from .telegram import Telegram
+from .research_runtime import Research
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +17,11 @@ class Service:
         self.cfg, self.store = cfg, store
         self.engine = Engine(cfg, store)
         self.market = Binance(cfg)
-        self.telegram = Telegram(cfg, store, self.engine, self.status_text)
+        self.research = Research(cfg, self.engine) if cfg.research_enabled else None
+        if self.research:
+            self.market.research_symbols = self.research.policy['symbols']
+        self.telegram = Telegram(cfg, store, self.engine, self.status_text,
+                                 self.research.report if self.research else None)
         self.last_error = None
         self.heartbeat = time.time()
         self.scanned_count = 0
@@ -35,6 +40,7 @@ class Service:
             'spot_pairs': len(self.market.universe), 'observed_pairs': self.scanned_count,
             'eligible_usdt_pairs': self.eligible_count,
             'error': self.last_error,
+            'research_mode': self.cfg.research_enabled,
             'telegram_configured': bool(self.cfg.telegram_token and self.cfg.telegram_chat_id),
         }
 
@@ -42,7 +48,7 @@ class Service:
         s = self.status()
         return (f"المصدر: Binance Spot | البيانات: {'حديثة' if s['market_ready'] else 'غير جاهزة / قديمة'}\n"
                 f"الأزواج الفورية: {s['spot_pairs']} | المؤهلة USDT: {s['eligible_usdt_pairs']}\n"
-                f"فحص شموع: حتى 20 زوجًا كل دورة (الأعلى زخمًا + تناوب)\n"
+                f"فحص شموع: {self.cfg.candle_interval} | {'8 أزواج في مقارنة مستقلة؛ لا دخول للمحفظة الأساسية' if self.research and not self.research.approved else 'استراتيجيات الدخول مفعلة'}\n"
                 f"الخطأ: {s['error'] or 'لا يوجد'}")
 
     def error(self, message):
@@ -63,12 +69,18 @@ class Service:
                     continue
                 self.engine.start(now)
                 signals = []
+                research_rows = {}
                 for symbol in symbols:
                     rows = await self.market.candles(symbol)
-                    signal = evaluate(symbol, rows, int(time.time()*1000))
-                    if signal:
-                        signals.append(signal)
+                    if self.research:
+                        research_rows[symbol] = rows
+                    else:
+                        signal = evaluate(symbol, rows, int(time.time()*1000))
+                        if signal:
+                            signals.append(signal)
                     await asyncio.sleep(0.15)
+                if self.research:
+                    signals = self.research.analyze(research_rows, self.market.quotes, time.time())
                 self.last_error = None
                 for signal in sorted(signals, key=lambda s: s.score, reverse=True):
                     now = time.time()
@@ -77,13 +89,14 @@ class Service:
                                for sym in self.engine.s['positions']):
                         break
                     self.store.save(self.engine.s, events=[dict(ts=now, kind='signal', **asdict(signal))])
-                    if now*1000-signal.candle_ms > 150_000:
+                    if now*1000-signal.candle_ms > (1_020_000 if self.research else 150_000):
                         continue
                     self.engine.enter(signal, self.market.quotes.get(signal.symbol), now,
                                       self.market.min_notional(signal.symbol))
                 if time.time()-self.last_status_log >= 60:
-                    log.info('Binance scan complete: market_ready=%s spot_pairs=%d eligible_usdt=%d analyzed=%d signals=%d',
-                             self.status()['market_ready'], len(self.market.universe), eligible, len(symbols), len(signals))
+                    log.info('Binance scan complete: market_ready=%s spot_pairs=%d eligible_usdt=%d analyzed=%d signals=%d comparison_accounts=%d primary_entries_enabled=%s',
+                             self.status()['market_ready'], len(self.market.universe), eligible, len(symbols), len(signals),
+                             len(self.research.shadows) if self.research else 0, not self.engine.s.get('research_blocked', False))
                     self.last_status_log = time.time()
             except asyncio.CancelledError:
                 raise
@@ -102,6 +115,8 @@ class Service:
                 quotes = await self.market.books()
                 now = time.time()
                 self.engine.monitor(quotes, now)
+                if self.research:
+                    self.research.monitor(quotes, now)
                 missing = [s for s in self.engine.s['positions'] if not valid_quote(quotes.get(s), now, self.cfg.stale_seconds)]
                 if missing:
                     self.error('أسعار مراكز مفتوحة غير متاحة: '+', '.join(missing))
@@ -118,10 +133,14 @@ class Service:
             today = day_key(time.time())
             if self.store.meta('last_report_day') != today:
                 self.store.enqueue('📊 التقرير اليومي UTC\n'+self.engine.report())
+                if self.research:
+                    self.store.enqueue(self.research.report())
                 self.store.set_meta('last_report_day', today)
             await asyncio.sleep(self.cfg.monitor_seconds)
 
     async def start(self):
+        if self.research:
+            self.research.announce()
         self.tasks = [asyncio.create_task(self.scanner(), name='scanner'),
                       asyncio.create_task(self.monitor(), name='monitor'),
                       asyncio.create_task(self.telegram.run(), name='telegram')]
@@ -132,4 +151,6 @@ class Service:
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.market.close()
         await self.telegram.close()
+        if self.research:
+            self.research.close()
         self.store.db.close()

@@ -26,6 +26,9 @@ class Config:
     telegram_token: str = ""
     telegram_chat_id: str = ""
     telegram_admin_id: str = ""
+    research_enabled: bool = False
+    candle_interval: str = "1m"
+    candle_limit: int = 100
 
     @classmethod
     def from_env(cls):
@@ -35,6 +38,7 @@ class Config:
         if base != "https://api.binance.com":
             raise ValueError("Use the official Binance endpoint; regional restrictions must not be bypassed")
         config = cls(data_dir=os.getenv("DATA_DIR", "./data"), binance_base_url=base,
+                     research_enabled=True, candle_interval="15m", candle_limit=320,
                      telegram_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
                      telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
                      telegram_admin_id=os.getenv("TELEGRAM_ADMIN_USER_ID", ""))

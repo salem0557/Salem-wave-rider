@@ -8,13 +8,14 @@ log = logging.getLogger(__name__)
 
 
 class Telegram:
-    def __init__(self, cfg, store, engine, status):
+    def __init__(self, cfg, store, engine, status, strategies=None):
         self.cfg, self.store, self.engine, self.status = cfg, store, engine, status
         self.client = httpx.AsyncClient(timeout=25)
         self.offset = int(store.meta('telegram_offset', '0'))
         self.last_error = None
         self.last_delivery = 0
         self.retry_at = 0
+        self.strategies = strategies
 
     async def api(self, method, payload):
         # Never log exception URLs: the Telegram API URL contains the bot token.
@@ -64,7 +65,9 @@ class Telegram:
         if command in ('/start', '/help'):
             answer = ('🧪 Wave Rider — تداول ورقي فقط\n/status الحالة\n/report الرصيد والنتائج\n'
                       '/positions المراكز\n/pause إيقاف دخول جديد\n/resume استئناف الدخول\n'
-                      '/id رقم المحادثة\nلا تحويل تلقائي إلى التداول الحقيقي، ولا ضمان ربح.')
+                      '/strategies نتائج مقارنة الاستراتيجيات\n/id رقم المحادثة\nلا تحويل تلقائي إلى التداول الحقيقي، ولا ضمان ربح.')
+        elif command in ('/strategies', '/research'):
+            answer = self.strategies() if self.strategies else 'المقارنة غير مفعلة.'
         elif command == '/id':
             answer = f'Chat ID: {chat}\nUser ID: {sender}'
         elif command in ('/report', '/balance'):

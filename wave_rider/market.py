@@ -23,6 +23,7 @@ class Binance:
         self.last_deep = {}
         self.health_error = None
         self.weight = 0
+        self.research_symbols = None
 
     async def get(self, path, params=None):
         if time.time() < self.blocked_until:
@@ -109,13 +110,16 @@ class Binance:
         selected = [s for _, s in candidates[:12]]
         rotation = sorted((s for _, s in candidates if s not in selected), key=lambda s: self.last_deep.get(s, 0))
         selected += rotation[:8]
+        if self.research_symbols is not None:
+            # Fetch all validated symbols, including BTC for the shared regime filter.
+            selected = [s for s in self.research_symbols if s in self.universe]
         for s in selected:
             self.last_deep[s] = now
         self.last_scan = now
         return selected, len(rows), len(candidates)
 
     async def candles(self, symbol):
-        return await self.get('klines', {'symbol': symbol, 'interval': '1m', 'limit': 100})
+        return await self.get('klines', {'symbol': symbol, 'interval': self.cfg.candle_interval, 'limit': self.cfg.candle_limit})
 
     def min_notional(self, symbol):
         return max([float(f.get('minNotional', 0)) for f in self.universe[symbol]['filters']
