@@ -1,6 +1,6 @@
 # Validation record — 2026-10-08
 
-- **29 tests passed** locally: paper ledger accounting, fees, gap exits, partial exits, limits, persistence, Telegram authorization/delivery handling, causal features, live-vs-batch indicator parity, adverse intrabar order, and isolation/restart of the six comparison accounts.
+- **34 tests passed** locally: paper ledger accounting, fees, gap exits, partial exits, limits, persistence, Telegram authorization/delivery handling, causal features, live-vs-batch indicator parity, adverse intrabar order, and isolation/restart of the comparison accounts, daily cutoff/outage recovery, first-pullback expiration and durable labeled hybrid Telegram messages.
 - Research inputs: **264 SHA-256-verified Binance public archives**, **771,072 complete 15-minute bars**, eight specified assets, January 2024 through September 2026. Reproducible manifest and results are in `reports/`.
 - The selection protocol was committed before results. The 2025 candidate selection was committed before running the 2026 holdout. **No candidate passed promotion**; these are failed strategy tests, not a claim of profitable trading.
 - Full assumptions, all selection results, final holdout, stress costs, and limitations: [RESEARCH_REPORT.md](RESEARCH_REPORT.md).
@@ -10,3 +10,6 @@
 - No real orders, no Binance credentials, and no OpenRouter calls are implemented.
 
 Run `pytest -q` to check behavior, and inspect `/status` plus `/strategies` for current runtime state. A liveness check alone is not proof of market readiness or profitability.
+
+- Day Wave: one preregistered intraday adaptation; historical data reused and explicitly exploratory, no new holdout claim. Daily base/stress results: [DAY_WAVE_REPORT.md](DAY_WAVE_REPORT.md). No primary promotion.
+- All 56 historical positive hybrid signals also matched a fresh 320-bar live-window calculation before market-regime/execution filtering.

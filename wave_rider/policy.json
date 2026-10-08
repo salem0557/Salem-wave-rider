@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-08-v1",
+  "version": "2026-10-08-v2-day-wave",
   "interval": "15m",
   "symbols": [
     "BTCUSDT",
@@ -22,5 +22,11 @@
     "stress_net_positive": false
   },
   "holdout_mean_week_return_pct": -0.6722655219920258,
-  "note": "No new primary entries unless a strategy passes the fixed historical gate. Shadow comparisons never spend or modify the primary ledger."
+  "note": "No new primary entries unless a strategy passes the fixed historical gate. Shadow comparisons never spend or modify the primary ledger.",
+  "day_wave": {
+    "status": "isolated_forward_paper_only",
+    "historical_report": "reports/day_wave.json",
+    "protocol": "research/day_wave_protocol.json",
+    "primary_approved": false
+  }
 }

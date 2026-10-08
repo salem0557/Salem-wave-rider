@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from .engine import Engine, valid_quote
+from .day_wave import NAME as DAY_WAVE, config as day_config
 from .researched import CANDIDATES, closed_features, from_feature, masks
 from .store import Store
 
@@ -12,6 +13,17 @@ class ShadowStore(Store):
         super().save(state, events, ())
     def enqueue(self, message):
         pass  # Only the main account's Telegram carries the comparison summary.
+
+
+class DayWaveStore(Store):
+    """Persist trade notifications with this ledger, then relay at least once."""
+    prefix = '🌊 موجة اليوم — حساب تجريبي مستقل، ليس المحفظة الأساسية\n'
+
+    def save(self, state, events=(), messages=()):
+        super().save(state, events, [self.prefix+m for m in messages])
+
+    def enqueue(self, message):
+        super().enqueue(self.prefix+message)
 
 
 class Research:
@@ -24,16 +36,27 @@ class Research:
         self.approved = approved
         self.main.s['research_blocked'] = approved is None
         self.main.store.save(self.main.s)
-        self.shadows = {name: Engine(cfg, ShadowStore(str(Path(cfg.data_dir)/f'shadow_{name}.db'))) for name in CANDIDATES}
+        self.shadows = {name: Engine(day_config(cfg) if name == DAY_WAVE else cfg,
+                            (DayWaveStore if name == DAY_WAVE else ShadowStore)(str(Path(cfg.data_dir)/f'shadow_{name}.db')))
+                        for name in CANDIDATES}
 
     def announce(self):
         if self.main.store.meta('research_policy_version') != self.policy['version']:
             self.main.store.enqueue('🔬 نتائج بحث الاستراتيجيات\n'
                 'لم تجتز أي من القواعد الست شروط الاعتماد بعد الرسوم والانزلاق.\n'
                 'المحفظة الأساسية: لا دخول جديد، مع استمرار إدارة خروج المراكز القائمة.\n'
-                'بدأت مقارنة أمامية منفصلة: 6 حسابات محاكاة، كل منها 300 USDT افتراضي. ليست أموالًا مضافة للمحفظة الأساسية.\n'
+                'أضيفت موجة اليوم: اختراق ثم أول تراجع ثم تأكيد؛ حساب مستقل 300 USDT افتراضي وتجربة 7 أيام.\n'
+                'موجة اليوم خاسرة أيضًا في الاختبار التاريخي بعد التكاليف وفرصها قليلة. البيانات مستخدمة سابقًا؛ هذا اختبار أمامي وليس اعتمادًا للربحية.\n'
+                'المخاطرة القصوى المخططة 0.5% للصفقة، مركزان، حد خسارة اليوم 2%. الخروج 23:45 UTC (02:45 الرياض) بأول سعر حديث متاح.\n'
+                'صفقات موجة اليوم تصلك هنا مع تمييز حسابها. بقيت الحسابات الست السابقة للمقارنة.\n'
                 'أرسل /strategies لنتائج المقارنة. لا يوجد تفعيل تلقائي لاستراتيجية غير معتمدة.')
             self.main.store.set_meta('research_policy_version',self.policy['version'])
+
+    def relay_day_messages(self):
+        store = self.shadows[DAY_WAVE].store
+        for item in store.pending():
+            self.main.store.enqueue(item['message'])
+            store.acknowledge(item['id'])
 
     def analyze(self, rows_by_symbol, quotes, now):
         frames = {s:closed_features(rows,int(now*1000)) for s,rows in rows_by_symbol.items()}
@@ -57,11 +80,13 @@ class Research:
                 continue
             for signal in sorted(by_name[name],key=lambda s:(-s.score,s.symbol)):
                 engine.enter(signal,quotes.get(signal.symbol),now)
+        self.relay_day_messages()
         return by_name[self.approved] if self.approved else []
 
     def monitor(self, quotes, now):
         for engine in self.shadows.values():
             engine.monitor(quotes,now)
+        self.relay_day_messages()
 
     def report(self):
         lines = ['🔬 مقارنة الاستراتيجيات — حسابات ورقية منفصلة',
@@ -70,6 +95,8 @@ class Research:
                  'المقارنة الأمامية الحالية (كل حساب بدأ بـ300):']
         for name,e in sorted(self.shadows.items(),key=lambda item:item[1].equity(),reverse=True):
             lines.append(f"{name}: {e.equity():.2f} USDT | {e.equity()-300:+.2f} | مكتملة {e.s['closed_trades']} | مفتوحة {len(e.s['positions'])}")
+        day = self.shadows[DAY_WAVE]
+        lines.append(f"🌊 موجة اليوم | نتيجة اليوم {day.equity()-day.s['day_equity']:+.2f} USDT | الحالة: {day.s['terminal'] or ('حد خسارة اليوم' if day.s['daily_halt'] else 'إيقاف يدوي' if self.main.s['paused'] else 'اختبار أمامي')}")
         lines.append('هذه مقارنة تجريبية، لا تثبت ربحية ولا تستخدم المحفظة الأساسية. /pause يمنع دخول الجميع؛ المخارج تستمر.')
         return '\n'.join(lines)
 

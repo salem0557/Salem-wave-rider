@@ -63,12 +63,12 @@ class Engine:
         s['peak_equity'] = max(s['peak_equity'], eq)
         if not s['daily_halt'] and eq <= s['day_equity'] * (1-self.cfg.daily_loss_limit):
             s['daily_halt'] = True
-            self.store.enqueue('🛑 حد خسارة اليوم 5%: إيقاف الدخول وإغلاق المراكز عند توفر أسعار حديثة.')
+            self.store.enqueue(f'🛑 حد خسارة اليوم {self.cfg.daily_loss_limit:.0%}: إيقاف الدخول وإغلاق المراكز عند توفر أسعار حديثة.')
         terminal = s['terminal']
         if s['started_at'] is not None and now-s['started_at'] >= self.cfg.experiment_days*86400:
             terminal = terminal or 'انتهت التجربة الأسبوعية'
         if eq <= s['peak_equity'] * (1-self.cfg.max_drawdown):
-            terminal = terminal or 'حد التراجع الكلي 15%'
+            terminal = terminal or f'حد التراجع الكلي {self.cfg.max_drawdown:.0%}'
         if eq >= self.cfg.target_equity:
             terminal = terminal or 'بلوغ الهدف التجريبي'
         if terminal and not s['terminal']:
@@ -80,6 +80,8 @@ class Engine:
         self._limits(now)
         if s['paused'] or s['daily_halt'] or s['terminal'] or s.get('research_blocked'):
             self.store.save(s)
+            return False
+        if cfg.intraday_flatten and (now % 86400 >= 23*3600 or any(day_key(p['opened_at']) != day_key(now) for p in s['positions'].values())):
             return False
         if signal.symbol in s['positions'] or len(s['positions']) >= cfg.max_positions:
             return False
@@ -174,10 +176,12 @@ class Engine:
             elif bid <= p['stop']:
                 # Gaps fill at the current bid, never at an unavailable stop price.
                 self.exit(sym, bid, now, 1, 'وقف متحرك' if p['partial'] else 'وقف خسارة')
+            elif self.cfg.intraday_flatten and (now % 86400 >= 23*3600+45*60 or day_key(now) != day_key(p['opened_at'])):
+                self.exit(sym, bid, now, 1, 'إغلاق جلسة موجة اليوم UTC')
             elif not p['partial'] and bid >= p['entry']+2*p['risk_distance']:
                 self.exit(sym, bid, now, 0.5, 'جني ربح عند 2R')
-            elif now-p['opened_at'] >= 6*3600:
-                self.exit(sym, bid, now, 1, 'انتهاء الحد الزمني 6 ساعات')
+            elif now-p['opened_at'] >= self.cfg.max_hold_seconds:
+                self.exit(sym, bid, now, 1, 'انتهاء الحد الزمني للمركز')
             if sym in self.s['positions']:
                 p['peak'] = max(p['peak'], bid)
                 if p['partial']:

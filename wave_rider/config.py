@@ -20,6 +20,8 @@ class Config:
     stale_seconds: float = 30
     scan_seconds: int = 30
     monitor_seconds: int = 5
+    max_hold_seconds: int = 6*3600
+    intraday_flatten: bool = False
     cooldown_seconds: int = 3600
     data_dir: str = "./data"
     binance_base_url: str = "https://api.binance.com"

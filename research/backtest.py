@@ -80,19 +80,21 @@ def intrabar(engine, arrays, i, now, spread):
             event(engine.s['positions'][symbol]['stop'], 4)
 
 
-def run_candidate(name, arrays, signals, regime, start, end, costs):
+def run_candidate(name, arrays, signals, regime, start, end, costs, period_days=7, config_override=None):
     times = arrays['BTCUSDT'][:,0]/1000
     start_ts, end_ts = pd.Timestamp(start,tz='UTC').timestamp(), pd.Timestamp(end,tz='UTC').timestamp()
     cfg = replace(Config(), fee_rate=costs['fee_per_side'], slippage=costs['slippage_per_side'])
+    if config_override is not None:
+        cfg = config_override(cfg)
     spread = costs['full_spread']
     weeks, pnls, total_fees, benchmark = [], [], 0.0, []
-    for left in np.arange(start_ts,end_ts,7*86400):
-        right = left+7*86400
+    for left in np.arange(start_ts,end_ts,period_days*86400):
+        right = left+period_days*86400
         if right > end_ts:
             break  # Exclude partial weeks from comparability.
         indices = np.flatnonzero((times>=left)&(times<right))
-        if len(indices) != 7*96:
-            raise ValueError('Incomplete week')
+        if len(indices) != period_days*96:
+            raise ValueError('Incomplete evaluation period')
         store = MemoryStore()
         engine = Engine(cfg,store,left)
         engine.start(left)
@@ -146,14 +148,14 @@ def main():
     arrays,signals,regime = prepare(protocol)
     if args.stage == 'selection':
         results = {}
-        for name in CANDIDATES:
+        for name in protocol['candidates']:
             results[name] = {}
             for phase,start,end in [('development',protocol['start'],protocol['development_end']),
                                     ('selection',protocol['development_end'],protocol['selection_end'])]:
                 r = run_candidate(name,arrays,signals,regime,start,end,protocol['base_costs'])
                 results[name][phase] = r
                 print(name,phase,{k:v for k,v in r.items() if k!='weekly_results'},flush=True)
-        ranked = sorted(CANDIDATES,key=lambda n:(results[n]['selection']['median_week_return_pct'],
+        ranked = sorted(protocol['candidates'],key=lambda n:(results[n]['selection']['median_week_return_pct'],
                                                 results[n]['selection']['profit_factor'] or 0),reverse=True)
         chosen = ranked[0]
         artifact = {'protocol_sha256':hashlib.sha256((ROOT/'research/protocol.json').read_bytes()).hexdigest(),

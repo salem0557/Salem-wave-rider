@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 
 from .strategy import Signal
+from .day_wave import entry_mask
 
-CANDIDATES = ('donchian20', 'donchian55', 'ema_pullback', 'squeeze_breakout', 'ema_cross', 'rsi_rebound')
+CANDIDATES = ('donchian20', 'donchian55', 'ema_pullback', 'squeeze_breakout', 'ema_cross', 'rsi_rebound', 'day_wave')
 INTERVAL_MS = 900_000
 
 
@@ -51,6 +52,7 @@ def masks(f):
     c = f[4]
     trend = f['valid'] & f['trend'] & f['not_extended'] & f['strong_close']
     return {
+        'day_wave': entry_mask(f),
         'donchian20': trend & c.gt(f['prev20']) & f['rvol'].ge(2),
         'donchian55': trend & c.gt(f['prev55']) & f['rvol'].ge(1.5),
         'ema_pullback': trend & f[3].shift().le(f['ema20'].shift()) & f[4].shift().gt(f['ema50'].shift()) & c.gt(f[2].shift()) & f['rvol'].ge(1.25) & f['rsi14'].between(45,70),
